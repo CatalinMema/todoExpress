@@ -1,128 +1,109 @@
-const express = require('express');
-const mangoose = require("mongoose");
+const express = require("express");
+const Todo = require("./src/API/models/todo");
+const connectDb = require("./utils/mongo");
 const app = express();
 const port = 5000;
 // var objectId = require('mongodb').ObjectID;
-app.use(express.json())
+app.use(express.json());
 
-  const connectDb = async() => {
-        try{
-            await mangoose.connect("mongodb://localhost:27017", {
-                useNewUrlParser: true,
-                useUnifiedTopology: true,
-                useCreateIndex: true,
-                useFindAndModify:false,
-            })
-            console.log("MongoDb connection SUCCES");
-        }catch(error){
-            console.log("MongoDb connection Fail");
-        }
-    }
-    connectDb();
+connectDb();
 
-const TodoSchema = new mangoose.Schema({
-    // id:{
-    //     type: String,
-    //     required:true,
-    // },
-    todo_text:{
-        type: String,
-        required: true,
-        unique: true,
-    },
-    date_todo:{
-        type: Date,
-        required:true,
-    },
-    completed_todo:{
-        type: Boolean,
-        required:true,
-    }
-})
+app.get("/todos", async (req, res) => {
+  Todo.find().then((todo) => res.json(todo));
+});
+app.get("/todos/page/:SKIPS", async (req, res) => {
+  const skipsElements = req.params.SKIPS;
+  Todo.find()
+    .skip(Number(skipsElements))
+    .limit(8)
+    .sort({ _id: -1 })
+    .then((todo) => res.json(todo));
+});
+app.get("/todos/search/:TEXT", async (req, res) => {
+  const text_todo = req.params.TEXT;
+  Todo.find({ text: { $regex: text_todo, $options: "i" } }).then((todo) =>
+    res.json(todo)
+  );
+});
 
-const Todo = mangoose.model('todo',TodoSchema);
+app.get("/todos/search/:TEXT/:SKIPS", async (req, res) => {
+  const skipsElements = req.params.SKIPS;
+  const text_todo = req.params.TEXT;
+  Todo.find({ text: { $regex: text_todo } })
+    .sort({ _id: -1 })
+    .skip(Number(skipsElements))
+    .limit(8)
+    .then((todo) => res.json(todo));
+});
 
-
-app.get('/getTodos', async (req,res)=>{
-    Todo.find().then(todo => res.json(todo));
-     
-})
-app.get('/getTodos/page/:nr_skips', async (req,res)=>{
-    const skipsElements=req.params.nr_skips;
-    Todo.find().skip(Number(skipsElements)).limit(8).sort({date_todo:1}).then(todo => res.json(todo))
-})
-app.get('/search/:text_value', async (req,res)=>{
-    const text_todo=req.params.text_value;
-    Todo.find({"todo_text" : {$regex : text_todo}}).then(todo => res.json(todo));
-})
-
-app.get('/search/:text_value/:nr_skips', async (req,res)=>{
-    const skipsElements=req.params.nr_skips;
-    const text_todo=req.params.text_value;
-    Todo.find({"todo_text" : {$regex : text_todo}}).sort({_id:-1}).skip(Number(skipsElements)).limit(8).then(todo => res.json(todo));
-})
-
-app.get('/dayfilter/:day', async (req,res)=>{
-    Todo.find({"date_todo" : req.params.day}).sort({_id:-1}).then(todo => {
-        console.log(todo);
-        res.json(todo)});
-})
-
-app.get('/dayfilter/:day/:nr_skips', async (req,res)=>{
-    const skipsElements=req.params.nr_skips;
-    Todo.find({"date_todo" : req.params.day}).skip(Number(skipsElements)).limit(8).sort({_id:-1}).then(todo => {
-        console.log(todo);
-        res.json(todo)});
-})
-
-app.post('/todos',async(req,res) =>{
-    const newTodo = new Todo({
-        todo_text:req.body.todo_text,
-        date_todo:req.body.date_todo,
-        completed_todo:req.body.completed_todo,
+app.get("/todos/:DAY", async (req, res) => {
+  Todo.find({ date: req.params.DAY })
+    .sort({ _id: -1 })
+    .then((todo) => {
+      console.log(todo);
+      res.json(todo);
     });
-    try {
-        await newTodo.save();
-        res.send("Todo added")
-    } catch (error) {
-        console.log(error);
-        res.send(error)
-    }
-})
-app.post('/delete',async (req,res) =>{
-    try {
-        await Todo.findByIdAndDelete(req.body.id);
-        res.send("Todo removed");
-      } catch {
-        res.status(404).send({ error: "Todo is not found!" });
-      }
-})
+});
 
-app.post('/update', async (req,res) =>{
-    var id = req.body.id;
-    try {
-        await Todo.updateOne({_id: id},{todo_text: req.body.todo_text})
-        res.send("Todo updated");
-      } catch {
-        res.status(404).send({ error: "Todo is not found!" });
-      }
-})
+app.get("/todos/:DAY/:SKIPS", async (req, res) => {
+  const skipsElements = req.params.SKIPS;
+  Todo.find({ date: req.params.DAY })
+    .skip(Number(skipsElements))
+    .limit(8)
+    .sort({ _id: -1 })
+    .then((todo) => {
+      console.log(todo);
+      res.json(todo);
+    });
+});
 
+app.post("/todos", async (req, res) => {
+  const newTodo = new Todo({
+    text: req.body.text,
+    date: req.body.date,
+    done: req.body.done,
+  });
+  try {
+    await newTodo.save();
+    res.send("Todo added");
+  } catch (error) {
+    console.log(error);
+    res.send(error);
+  }
+});
+app.delete("/todos/:ID", async (req, res) => {
+  try {
+    await Todo.findByIdAndDelete(req.params.ID);
+    res.send("Todo removed");
+  } catch {
+    res.status(404).send({ error: "Todo is not found!" });
+  }
+});
 
-app.post('/completed', async (req,res) =>{
-    var id = req.body.id;
-    let cmp = req.body.completed_todo;
-    try {
-        await Todo.updateOne({_id: id},{completed_todo:cmp}).then((result)=>res.send("To do complete"))
-      } catch {
-        res.status(404).send({ error: "Todo is not found!" });
-      }
-})
+app.put("/todos/:ID/:TEXT", async (req, res) => {
+  try {
+    await Todo.updateOne({ _id: req.params.ID }, { text: req.params.TEXT });
+    res.send("Todo updated");
+  } catch {
+    res.status(404).send({ error: "Todo is not found!" });
+  }
+});
 
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
+app.put("/completed/:ID/:DONE", async (req, res) => {
+  try {
+    await Todo.updateOne(
+      { _id: req.params.ID },
+      { done: req.params.DONE }
+    ).then((result) => res.send("To do complete"));
+  } catch {
+    res.status(404).send({ error: "Todo is not found!" });
+  }
+});
+
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
 
 app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`)
-})
+  console.log(`Example app listening at http://localhost:${port}`);
+});
